@@ -1,5 +1,5 @@
-#ifndef FINFO_FLAC
-#define FINFO_FLAC
+#ifndef FINFO_FLAC_H
+#define FINFO_FLAC_H
 
 #include <stdio.h>
 #include <stdbool.h>
@@ -15,6 +15,8 @@ enum flac_metadata_type {
 	FLAC_PICTURE_TYPE		 = 6,
 	FLAC_UNKNOWN_TYPE
 };
+
+char *flac_metadata_type_str(enum flac_metadata_type type);
 
 /*
  * The streaminfo metadata block has information about the whole FLAC stream,
@@ -38,7 +40,7 @@ struct flac_streaminfo {
 	// Total number of interchannel samples in the stream. 0 means it is not known.
 	uint64_t interchannel_samples;
 	// MD5 checksum of the unencoded audio data.
-	unsigned char md5sum[6];
+	unsigned char md5sum[16];
 };
 
 struct flac_padding {
@@ -77,7 +79,7 @@ struct flac_vorbis_field {
 	// Length of the data contained in the field.
 	uint32_t length;
 	// Field data. It consists of a name and the contents, separated by a '='.
-	char *data; 
+	char *data;
 };
 
 // NOTE: that the 32-bit field lengths are coded little-endian as opposed to the usual big-endian coding of fixed-length integers in the rest of the FLAC format.
@@ -93,9 +95,59 @@ struct flac_vorbis_comment {
 };
 
 struct flac_cuesheet {
+	// TODO:
+};
+
+enum flac_picture_type {
+	FLAC_OTHER_PICTURE_TYPE					= 0,
+	FLAC_PNG_ICON_PICTURE_TYPE				= 1,
+	FLAC_GENERAL_ICON_PICTURE_TYPE			= 2,
+	FLAC_FRONT_COVER_PICTURE_TYPE			= 3,
+	FLAC_BACK_COVER_PICTURE_TYPE			= 4,
+	FLAC_LINER_NOTES_PAGE_PICTURE_TYPE		= 5,
+	FLAC_MEDIA_LABEL_PICTURE_TYPE			= 6,
+	FLAC_LEAD_ARTIST_PICTURE_TYPE			= 7,
+	FLAC_ARTIST_PICTURE_TYPE				= 8,
+	FLAC_CONDUCTOR_PICTURE_TYPE				= 9,
+	FLAC_BAND_PICTURE_TYPE					= 10,
+	FLAC_COMPOSER_PICTURE_TYPE				= 11,
+	FLAC_LYRICIST_PICTURE_TYPE				= 12,
+	FLAC_RECORDING_LOCATION_PICTURE_TYPE	= 13,
+	FLAC_DURING_RECORDING_PICTURE_TYPE		= 14,
+	FLAC_DURING_PERFORMANCE_PICTURE_TYPE	= 15,
+	FLAC_VIDEO_CAPTURE_PICTURE_TYPE			= 16,
+	FLAC_A_BRIGHT_COLORED_FISH_PICTURE_TYPE = 17,
+	FLAC_ILLUSTRATION_PICTURE_TYPE			= 18,
+	FLAC_BAND_LOGO_PICTURE_TYPE				= 19,
+	FLAC_PUBLISHER_LOGO_PICTURE_TYPE		= 20,
+	FLAC_INVALID_PICTURE_TYPE
 };
 
 struct flac_picture {
+	// Picture type.
+	enum flac_picture_type type;
+	// Length of the media type string in bytes.
+	uint32_t media_type_string_length;
+	// Media type string or the text string --> to signify that the data part is
+	// a URI.
+	char *media_type_string;
+	// Length of the description string in bytes.
+	uint32_t description_string_length;
+	// Description of the picture.
+	char *description_string; // NOTE: this is coded as UTF-8
+	// Width of the picture in pixels.
+	uint32_t picture_width;
+	// Height of the picture in pixels.
+	uint32_t picture_height;
+	// Color depth of the picture in bits per pixel.
+	uint32_t color_depth;
+	// Number of colors used for indexed-color pictures.
+	// This value is 0 for non-indexed pictures.
+	uint32_t color_n;
+	// Length of the picture data in bytes.
+	uint32_t data_len;
+	// Binary picture data.
+	char *data;
 };
 
 /*
@@ -104,12 +156,21 @@ struct flac_picture {
 struct flac_metadata_block {
 	enum flac_metadata_type type;
 	bool last_block;
-	uint8_t block_length;
+	uint32_t block_length;
 
 	union {
+		struct flac_streaminfo streaminfo;
+		struct flac_padding padding;
+		struct flac_application application;
+		struct flac_seek_table seek_table;
+		struct flac_vorbis_comment vorbis_comment;
+		struct flac_cuesheet cuesheet;
+		struct flac_picture picture;
 	} data;
 };
 
+void flac_metadata_block_free(struct flac_metadata_block *block); // TODO
+
 bool try_flac(FILE *file);
 
-#endif
+#endif // FINFO_FLAC_H
