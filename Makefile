@@ -1,5 +1,5 @@
 CC=gcc
-CFLAGS=-Wall
+CFLAGS=-Wall -g
 LFLAGS=
 
 SRCS = $(wildcard *.c)
@@ -10,6 +10,7 @@ TARGET = finfo
 .PHONY:  all clean
 
 all: $(TARGET)
+	rm $(OBJS)
 
 $(TARGET):  $(OBJS)
 	$(CC) $(LFLAGS) -o $@ $^

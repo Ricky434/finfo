@@ -169,7 +169,7 @@ struct flac_metadata_block {
 	} data;
 };
 
-void flac_metadata_block_free(struct flac_metadata_block *block); // TODO
+void flac_metadata_block_free(struct flac_metadata_block *block);
 
 bool try_flac(FILE *file);
 

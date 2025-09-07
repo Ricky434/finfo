@@ -45,20 +45,43 @@ void flac_print_streaminfo(struct flac_streaminfo *info) {
 	printf("\n");
 }
 
+void flac_print_application(struct flac_application *application) {
+	// TODO:test
+	printf("AppId: %d, App data: %s\n", application->app_id,
+		   application->app_data);
+}
+
+void flac_print_seek_table(struct flac_seek_table *table) {
+	for (size_t i = 0; i < table->seek_points_n; i++) {
+		struct flac_seek_point point = table->seek_points[i];
+		printf("first sample: %lu, offset: %lu, samples: %ud\n",
+			   point.first_sample, point.offset, point.samples_n);
+	}
+}
+
+void flac_print_vorbis_comment(struct flac_vorbis_comment *vorbis) {
+	printf("vendor: %.*s\n", vorbis->vendor_string_len, vorbis->vendor_string);
+
+	for (size_t i = 0; i < vorbis->fields_n; i++) {
+		printf("%.*s\n", vorbis->fields[i].length, vorbis->fields[i].data);
+	}
+}
+
 /*
 * Parse the given array of bytes BLOCK, long SIZE bytes, as a streaminfo metadata block,
 * and put it inside DST.
 */
 void flac_parse_streaminfo(unsigned char *block, int size,
 						   struct flac_metadata_block *dst) {
+	struct flac_streaminfo *streaminfo = &dst->data.streaminfo;
 	// First 16 bits
-	dst->data.streaminfo.min_blk_size = BE_bytes_to_int(block, 2);
+	streaminfo->min_blk_size = BE_bytes_to_int(block, 2);
 	// Next 16 bits
-	dst->data.streaminfo.max_blk_size = BE_bytes_to_int(block + 2, 2);
+	streaminfo->max_blk_size = BE_bytes_to_int(block + 2, 2);
 	// Next 24 bits
-	dst->data.streaminfo.min_frame_size = BE_bytes_to_int(block + 4, 3);
+	streaminfo->min_frame_size = BE_bytes_to_int(block + 4, 3);
 	// Next 24 bits
-	dst->data.streaminfo.max_frame_size = BE_bytes_to_int(block + 7, 3);
+	streaminfo->max_frame_size = BE_bytes_to_int(block + 7, 3);
 
 	// Next 20 bits
 	// We have to make this: 12345678 12345678 12340000
@@ -67,24 +90,24 @@ void flac_parse_streaminfo(unsigned char *block, int size,
 		((block[10] & 0b11110000) >> 4),
 		((block[11] & 0b11110000) >> 4) + ((block[10] & 0b00001111) << 4),
 		((block[12] & 0b11110000) >> 4) + ((block[11] & 0b00001111) << 4)};
-	dst->data.streaminfo.sample_rate = BE_bytes_to_int(buf, 3);
+	streaminfo->sample_rate = BE_bytes_to_int(buf, 3);
 
 	// Next 3 bits
-	dst->data.streaminfo.channels = (block[12] & 0b00001110) >> 1;
+	streaminfo->channels = (block[12] & 0b00001110) >> 1;
 
 	// Next 5 bits. The last bit of the 12th byte and the first 4 bits of the next byte.
-	dst->data.streaminfo.bits_per_sample =
+	streaminfo->bits_per_sample =
 		((block[12] & 1) << 4) + ((block[13] & 0b11110000) >> 4);
 
 	// Next 36 bits. The last 4 bits of the 13th byte and the next 4 bytes.
 	uint64_t first4bits_sample_rate = block[13] & 0b00001111;
-	dst->data.streaminfo.interchannel_samples =
+	streaminfo->interchannel_samples =
 		BE_bytes_to_int(block + 14, 4) + (first4bits_sample_rate << 8 * 4);
 
 	// Last 128 bits (16 bytes).
-	memcpy(dst->data.streaminfo.md5sum, block + 18, 16);
+	memcpy(streaminfo->md5sum, block + 18, 16);
 
-	flac_print_streaminfo(&dst->data.streaminfo);
+	flac_print_streaminfo(streaminfo);
 }
 
 /*
@@ -93,6 +116,13 @@ void flac_parse_streaminfo(unsigned char *block, int size,
 */
 void flac_parse_application(unsigned char *block, int size,
 							struct flac_metadata_block *dst) {
+	struct flac_application *application = &dst->data.application;
+
+	application->app_id	  = BE_bytes_to_int(block, 4);
+	application->app_data = malloc(dst->block_length - 4);
+	memcpy(application->app_data, block + 4, dst->block_length - 4);
+
+	flac_print_application(application);
 }
 
 /*
@@ -101,6 +131,31 @@ void flac_parse_application(unsigned char *block, int size,
 */
 void flac_parse_seekTable(unsigned char *block, int size,
 						  struct flac_metadata_block *dst) {
+	struct flac_seek_table *seek_table = &dst->data.seek_table;
+
+	// Each seek point is 18 bytes long.
+	const int seek_point_size = 18;
+	size_t points			  = dst->block_length / seek_point_size;
+
+	seek_table->seek_points_n = points;
+	seek_table->seek_points	  = calloc(points, sizeof(struct flac_seek_point));
+
+	for (size_t i = 0; i < points; i++) {
+		unsigned char *point_p = block + (i * seek_point_size);
+
+		struct flac_seek_point point = {
+			// First 64 bits of the point.
+			.first_sample = BE_bytes_to_int(point_p, 8),
+			// Next 64 bits of the point.
+			.offset = BE_bytes_to_int(point_p, 8),
+			// Last 16 bits of the point.
+			.samples_n = BE_bytes_to_int(point_p, 2),
+		};
+
+		seek_table->seek_points[i] = point;
+	}
+
+	flac_print_seek_table(seek_table);
 }
 
 /*
@@ -109,6 +164,37 @@ void flac_parse_seekTable(unsigned char *block, int size,
 */
 void flac_parse_vorbisComment(unsigned char *block, int size,
 							  struct flac_metadata_block *dst) {
+	struct flac_vorbis_comment *vorbis = &dst->data.vorbis_comment;
+
+	vorbis->vendor_string_len = LE_bytes_to_int(block, 4);
+
+	vorbis->vendor_string = malloc(vorbis->vendor_string_len);
+	memcpy(vorbis->vendor_string, block + 4, vorbis->vendor_string_len);
+
+	vorbis->fields_n =
+		LE_bytes_to_int(block + 4 + vorbis->vendor_string_len, 4);
+
+	vorbis->fields = calloc(vorbis->fields_n, sizeof(struct flac_vorbis_field));
+
+	// The fields start after the vendor string length,
+	// the vendor string, and the fields number.
+	unsigned char *fields_start = block + 4 + vorbis->vendor_string_len + 4;
+
+	int offset = 0;
+	for (size_t i = 0; i < vorbis->fields_n; i++) {
+		vorbis->fields[i].length = LE_bytes_to_int(fields_start + (offset), 4);
+
+		vorbis->fields[i].data = malloc(vorbis->fields[i].length);
+		memcpy(vorbis->fields[i].data, fields_start + offset + 4,
+			   vorbis->fields[i].length);
+
+		// Update the offset from the start of the vorbis fields by
+		// adding the bytes occupied by the current field's
+		// length and data.
+		offset += 4 + vorbis->fields[i].length;
+	}
+
+	flac_print_vorbis_comment(vorbis);
 }
 
 /*
@@ -117,6 +203,7 @@ void flac_parse_vorbisComment(unsigned char *block, int size,
 */
 void flac_parse_cuesheet(unsigned char *block, int size,
 						 struct flac_metadata_block *dst) {
+	// TODO:
 }
 
 /*
@@ -135,10 +222,9 @@ struct flac_metadata_block *flac_parse_block(unsigned char header[4],
 	block->last_block = (header[0] & 0b10000000) >> 7;
 	// The next 7 bits of the first byte codes for the block type.
 	block->type = header[0] & 0b01111111;
-	// The next 3 bytes code for the block length. NOTE: they are big endian I think.
+	// The next 3 bytes code for the block length.
 	block->block_length = BE_bytes_to_int(&header[1], 3);
 
-	//printf("last: %d, type: %s, length: %u\n", block->last_block, flac_metadata_type_str(block->type), block->block_length);
 	printf("%02X:%02X:%02X:%02X, last: %d, type: %s, length: %u\n", header[0],
 		   header[1], header[2], header[3], block->last_block,
 		   flac_metadata_type_str(block->type), block->block_length);
@@ -149,24 +235,65 @@ struct flac_metadata_block *flac_parse_block(unsigned char header[4],
 	switch (block->type) {
 	case FLAC_STREAMINFO_TYPE:
 		flac_parse_streaminfo(data, block->block_length, block);
+		break;
 	case FLAC_PADDING_TYPE: {
 		struct flac_padding padding = {.bytes = block->block_length};
 		block->data.padding			= padding;
+		break;
 	}
 	case FLAC_APPLICATION_TYPE:
 		flac_parse_application(data, block->block_length, block);
+		break;
 	case FLAC_SEEK_TABLE_TYPE:
 		flac_parse_seekTable(data, block->block_length, block);
+		break;
 	case FLAC_VORBIS_COMMENT_TYPE:
 		flac_parse_vorbisComment(data, block->block_length, block);
+		break;
 	case FLAC_CUESHEET_TYPE:
 		flac_parse_cuesheet(data, block->block_length, block);
+		break;
 	case FLAC_PICTURE_TYPE:
 		flac_parse_picture(data, block->block_length, block);
-	default:;
+		break;
+	case FLAC_UNKNOWN_TYPE:
+		break;
 	}
 
+	free(data);
 	return block;
+}
+
+void flac_metadata_block_free(struct flac_metadata_block *block) {
+	switch (block->type) {
+	case FLAC_STREAMINFO_TYPE:
+	case FLAC_PADDING_TYPE:
+	case FLAC_UNKNOWN_TYPE:
+		break;
+	case FLAC_APPLICATION_TYPE:
+		free(block->data.application.app_data);
+		break;
+	case FLAC_SEEK_TABLE_TYPE:
+		free(block->data.seek_table.seek_points);
+		break;
+	case FLAC_VORBIS_COMMENT_TYPE:
+		free(block->data.vorbis_comment.vendor_string);
+		for (int i = 0; i < block->data.vorbis_comment.fields_n; i++) {
+			free(block->data.vorbis_comment.fields[i].data);
+		}
+		free(block->data.vorbis_comment.fields);
+		break;
+	case FLAC_CUESHEET_TYPE:
+		// TODO:
+		break;
+	case FLAC_PICTURE_TYPE:
+		free(block->data.picture.media_type_string);
+		free(block->data.picture.description_string);
+		free(block->data.picture.data);
+		break;
+	}
+
+	free(block);
 }
 
 bool try_flac(FILE *file) {
@@ -179,7 +306,11 @@ bool try_flac(FILE *file) {
 		fread(header, 4, 1, file);
 
 		struct flac_metadata_block *block = flac_parse_block(header, file);
-		if (block->last_block) break;
+		if (block->last_block) {
+			flac_metadata_block_free(block);
+			break;
+		}
+		flac_metadata_block_free(block);
 	}
 
 	return true;
