@@ -1,3 +1,5 @@
 specs/
 finfo
 *.o
+.vscode/
+temp_picture

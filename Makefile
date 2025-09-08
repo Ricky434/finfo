@@ -7,7 +7,7 @@ OBJS = $(SRCS:.c=.o)
 
 TARGET = finfo
 
-.PHONY:  all clean
+.PHONY:  all clean debug
 
 all: $(TARGET)
 	rm $(OBJS)
@@ -20,3 +20,6 @@ $(TARGET):  $(OBJS)
 
 clean:
 	rm $(OBJS) $(TARGET)
+
+debug: CFLAGS += -DDEBUG
+debug: all

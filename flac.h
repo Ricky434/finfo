@@ -54,7 +54,7 @@ struct flac_application {
 	uint32_t app_id;
 	// Application data. Its length is the length contained in the block header
 	// minus the 32 bits of the application id.
-	char *app_data;
+	unsigned char *app_data;
 };
 
 struct flac_seek_point {
@@ -94,8 +94,41 @@ struct flac_vorbis_comment {
 	struct flac_vorbis_field *fields;
 };
 
+struct flac_cuesheet_track_idx_point {
+	// Offset in samples relative to the track offset.
+	uint64_t offset;
+	// Track index point number.
+	uint8_t number;
+};
+
+struct flac_cuesheet_track {
+	// Track offset of the first index point in samples.
+	uint64_t offset;
+	// Track number.
+	uint8_t number;
+	// Track ISRC.
+	char ISRC[12];
+	// Track type. True for audio, false for non-audio.
+	bool audio;
+	// Pre-emphasis flag. True for pre-emphasis, false for no pre-emphasis.
+	bool pre_emphasis;
+	// Number of track index points.
+	uint8_t idx_points_n;
+	// Array of cuesheet track index points.
+	struct flac_cuesheet_track_idx_point *idx_points;
+};
+
 struct flac_cuesheet {
-	// TODO:
+	// Media catalog number.
+	char catalog_number[128];
+	// Number of lead-in samples.
+	uint64_t leadin_samples;
+	// True if the cuesheet corresponds to a CD-DA.
+	bool cd_da;
+	// Number of tracks in this cuesheet.
+	uint8_t tracks_n;
+	// Array of cuesheet tracks.
+	struct flac_cuesheet_track *tracks;
 };
 
 enum flac_picture_type {
@@ -127,14 +160,14 @@ struct flac_picture {
 	// Picture type.
 	enum flac_picture_type type;
 	// Length of the media type string in bytes.
-	uint32_t media_type_string_length;
+	uint32_t media_type_string_len;
 	// Media type string or the text string --> to signify that the data part is
 	// a URI.
 	char *media_type_string;
 	// Length of the description string in bytes.
-	uint32_t description_string_length;
+	uint32_t description_len;
 	// Description of the picture.
-	char *description_string; // NOTE: this is coded as UTF-8
+	char *description; // NOTE: this is coded as UTF-8
 	// Width of the picture in pixels.
 	uint32_t picture_width;
 	// Height of the picture in pixels.
@@ -147,7 +180,7 @@ struct flac_picture {
 	// Length of the picture data in bytes.
 	uint32_t data_len;
 	// Binary picture data.
-	char *data;
+	unsigned char *data;
 };
 
 /*

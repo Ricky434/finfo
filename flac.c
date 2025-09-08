@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <string.h>
+#include <sys/ioctl.h>
 #include "flac.h"
 #include "utils.h"
 
@@ -28,6 +29,8 @@ char *flac_metadata_type_str(enum flac_metadata_type type) {
 		return "UNKNOWN\0";
 	}
 }
+
+// ===== Block printers =====
 
 void flac_print_streaminfo(struct flac_streaminfo *info) {
 	printf("Min block size: %u\n", info->min_blk_size);
@@ -66,6 +69,28 @@ void flac_print_vorbis_comment(struct flac_vorbis_comment *vorbis) {
 		printf("%.*s\n", vorbis->fields[i].length, vorbis->fields[i].data);
 	}
 }
+
+void flac_print_picture(struct flac_picture *picture) {
+	printf("Picture type: %u\n", picture->type);
+	printf("Media type strlen: %u\n", picture->media_type_string_len);
+	printf("Media type: %s\n", picture->media_type_string);
+	printf("Description strlen: %u\n", picture->description_len);
+	printf("Description: %s\n", picture->description);
+	printf("Color depth: %u\n", picture->color_depth);
+	printf("Number of colors: %u\n", picture->color_n);
+	printf("Picture width: %u\n", picture->picture_width);
+	printf("Picture height: %u\n", picture->picture_height);
+	printf("Data len: %u\n", picture->data_len);
+
+	// TODO: check errors
+	FILE *picture_file = fopen("./temp_picture", "wb");
+	fwrite(picture->data, picture->data_len, 1, picture_file);
+	fclose(picture_file);
+
+	// TODO: print image to terminal with kitty
+}
+
+// ===== Block parsers =====
 
 /*
 * Parse the given array of bytes BLOCK, long SIZE bytes, as a streaminfo metadata block,
@@ -203,7 +228,42 @@ void flac_parse_vorbisComment(unsigned char *block, int size,
 */
 void flac_parse_cuesheet(unsigned char *block, int size,
 						 struct flac_metadata_block *dst) {
-	// TODO:
+	struct flac_cuesheet *cuesheet = &dst->data.cuesheet;
+
+	memcpy(cuesheet->catalog_number, block, 128);
+	cuesheet->leadin_samples = BE_bytes_to_int(block + 128, 8);
+	cuesheet->cd_da			 = (block[137] & 0b10000000) >> 7;
+	// 258 reserved bytes.
+	unsigned char *tracks_start = block + 137 + 258;
+	cuesheet->tracks_n			= BE_bytes_to_int(tracks_start, 1);
+	cuesheet->tracks =
+		calloc(cuesheet->tracks_n, sizeof(struct flac_cuesheet_track));
+
+	unsigned char *current_track_start = tracks_start + 1;
+	for (int i = 0; i < cuesheet->tracks_n; i++) {
+		struct flac_cuesheet_track *track = &cuesheet->tracks[i];
+		track->offset = BE_bytes_to_int(current_track_start, 8);
+		track->number = BE_bytes_to_int(current_track_start + 8, 1);
+		memcpy(track->ISRC, current_track_start + 9, 12);
+		track->audio		= !((current_track_start[21] & 0b10000000) >> 7);
+		track->pre_emphasis = (current_track_start[21] & 0b01000000) >> 6;
+		// 13 reserved bytes.
+		track->idx_points_n = BE_bytes_to_int(current_track_start + 21 + 13, 1);
+		track->idx_points	= calloc(
+			  track->idx_points_n, sizeof(struct flac_cuesheet_track_idx_point));
+
+		unsigned char *curr_idx_point = current_track_start + 21 + 13 + 1;
+		for (int j = 0; j < track->idx_points_n; j++) {
+			track->idx_points[i].offset = BE_bytes_to_int(curr_idx_point, 8);
+			track->idx_points[i].number =
+				BE_bytes_to_int(curr_idx_point + 8, 1);
+			// 3 reserved bytes.
+			curr_idx_point = curr_idx_point + 9 + 3;
+		}
+
+		current_track_start = curr_idx_point;
+	}
+	// TODO: print
 }
 
 /*
@@ -212,7 +272,34 @@ void flac_parse_cuesheet(unsigned char *block, int size,
 */
 void flac_parse_picture(unsigned char *block, int size,
 						struct flac_metadata_block *dst) {
+	struct flac_picture *picture = &dst->data.picture;
+
+	picture->type				   = BE_bytes_to_int(block, 4);
+	picture->media_type_string_len = BE_bytes_to_int(block + 4, 4);
+	picture->media_type_string =
+		calloc(picture->media_type_string_len, sizeof(char));
+	memcpy(picture->media_type_string, block + 8,
+		   picture->media_type_string_len);
+
+	unsigned char *descr_start = block + 8 + picture->media_type_string_len;
+	picture->description_len   = BE_bytes_to_int(descr_start, 4);
+	picture->description	   = calloc(picture->description_len, sizeof(char));
+	memcpy(picture->description, descr_start + 4, picture->description_len);
+
+	unsigned char *descr_end = descr_start + 4 + picture->description_len;
+	picture->picture_width	 = BE_bytes_to_int(descr_end, 4);
+	picture->picture_height	 = BE_bytes_to_int(descr_end + 4, 4);
+	picture->color_depth	 = BE_bytes_to_int(descr_end + 8, 4);
+	picture->color_n		 = BE_bytes_to_int(descr_end + 12, 4);
+
+	picture->data_len = BE_bytes_to_int(descr_end + 16, 4);
+	picture->data	  = calloc(picture->data_len, sizeof(*picture->data));
+	memcpy(picture->data, descr_end + 20, picture->data_len);
+
+	flac_print_picture(picture);
 }
+
+// ===== Block functions =====
 
 struct flac_metadata_block *flac_parse_block(unsigned char header[4],
 											 FILE *file) {
@@ -284,11 +371,14 @@ void flac_metadata_block_free(struct flac_metadata_block *block) {
 		free(block->data.vorbis_comment.fields);
 		break;
 	case FLAC_CUESHEET_TYPE:
-		// TODO:
+		for (int i = 0; i < block->data.cuesheet.tracks_n; i++) {
+			free(block->data.cuesheet.tracks[i].idx_points);
+		}
+		free(block->data.cuesheet.tracks);
 		break;
 	case FLAC_PICTURE_TYPE:
 		free(block->data.picture.media_type_string);
-		free(block->data.picture.description_string);
+		free(block->data.picture.description);
 		free(block->data.picture.data);
 		break;
 	}
