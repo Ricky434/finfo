@@ -70,6 +70,32 @@ void flac_print_vorbis_comment(struct flac_vorbis_comment *vorbis) {
 	}
 }
 
+void flac_print_cuesheet(struct flac_cuesheet *cuesheet) {
+	printf("Media catalog number: %.128s\n", cuesheet->catalog_number);
+	printf("Lead-in samples: %lu\n", cuesheet->leadin_samples);
+	printf("CD-DA: %d\n", cuesheet->cd_da);
+	printf("Number of tracks: %u\n", cuesheet->tracks_n);
+
+	for (size_t i = 0; i < cuesheet->tracks_n; i++) {
+		printf("Track %lu\n", i);
+		printf("\tOffset: %lu\n", cuesheet->tracks[i].offset);
+		printf("\tNumber: %u\n", cuesheet->tracks[i].number);
+		printf("\tISRC: %.12s\n", cuesheet->tracks[i].ISRC);
+		printf("\tAudio: %d\n", cuesheet->tracks[i].audio);
+		printf("\tPre-emphasis: %d\n", cuesheet->tracks[i].pre_emphasis);
+		printf("\tNumber of index points: %u\n",
+			   cuesheet->tracks[i].idx_points_n);
+
+		for (size_t j = 0; j < cuesheet->tracks[i].idx_points_n; j++) {
+			printf("\tPoint %lu\n", j);
+			printf("\t\tOffset: %lu\n",
+				   cuesheet->tracks[i].idx_points[j].offset);
+			printf("\t\tNumber: %u\n",
+				   cuesheet->tracks[i].idx_points[j].number);
+		}
+	}
+}
+
 void flac_print_picture(struct flac_picture *picture) {
 	printf("Picture type: %u\n", picture->type);
 	printf("Media type strlen: %u\n", picture->media_type_string_len);
@@ -232,7 +258,7 @@ void flac_parse_cuesheet(unsigned char *block, int size,
 
 	memcpy(cuesheet->catalog_number, block, 128);
 	cuesheet->leadin_samples = BE_bytes_to_int(block + 128, 8);
-	cuesheet->cd_da			 = (block[137] & 0b10000000) >> 7;
+	cuesheet->cd_da			 = (block[136] & 0b10000000) >> 7;
 	// 258 reserved bytes.
 	unsigned char *tracks_start = block + 137 + 258;
 	cuesheet->tracks_n			= BE_bytes_to_int(tracks_start, 1);
@@ -248,11 +274,12 @@ void flac_parse_cuesheet(unsigned char *block, int size,
 		track->audio		= !((current_track_start[21] & 0b10000000) >> 7);
 		track->pre_emphasis = (current_track_start[21] & 0b01000000) >> 6;
 		// 13 reserved bytes.
-		track->idx_points_n = BE_bytes_to_int(current_track_start + 21 + 13, 1);
+		unsigned char *points_start = current_track_start + 22 + 13;
+		track->idx_points_n = BE_bytes_to_int(points_start, 1);
 		track->idx_points	= calloc(
 			  track->idx_points_n, sizeof(struct flac_cuesheet_track_idx_point));
 
-		unsigned char *curr_idx_point = current_track_start + 21 + 13 + 1;
+		unsigned char *curr_idx_point = points_start + 1;
 		for (int j = 0; j < track->idx_points_n; j++) {
 			track->idx_points[i].offset = BE_bytes_to_int(curr_idx_point, 8);
 			track->idx_points[i].number =
@@ -263,7 +290,8 @@ void flac_parse_cuesheet(unsigned char *block, int size,
 
 		current_track_start = curr_idx_point;
 	}
-	// TODO: print
+
+	flac_print_cuesheet(cuesheet);
 }
 
 /*
