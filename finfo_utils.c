@@ -1,4 +1,5 @@
 #include <stdint.h>
+#include "finfo_utils.h"
 
 uint64_t BE_bytes_to_int(unsigned char *bytes, unsigned short len) {
 	uint64_t res = 0;

@@ -10,4 +10,4 @@ uint64_t BE_bytes_to_int(unsigned char *bytes, unsigned short len);
 // Since 64 bits are 8 bytes, the max length of the array is 8.
 uint64_t LE_bytes_to_int(unsigned char *bytes, unsigned short len);
 
-#endif // FINFO_UTILS_H
+#endif // !FINFO_UTILS_H

@@ -5,6 +5,8 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+extern unsigned char FLAC_SIGNATURE[4];
+
 enum flac_metadata_type {
 	FLAC_STREAMINFO_TYPE	 = 0,
 	FLAC_PADDING_TYPE		 = 1,

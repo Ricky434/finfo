@@ -3,8 +3,10 @@
 #include <stdbool.h>
 #include <string.h>
 #include <sys/ioctl.h>
-#include "flac.h"
-#include "utils.h"
+#include "finfo_flac.h"
+#include "finfo_utils.h"
+
+unsigned char FLAC_SIGNATURE[4] = {'\x66', '\x4C', '\x61', '\x43'};
 
 /*
 * Return a null terminated string representing the input flac metadata type.
@@ -275,8 +277,8 @@ void flac_parse_cuesheet(unsigned char *block, int size,
 		track->pre_emphasis = (current_track_start[21] & 0b01000000) >> 6;
 		// 13 reserved bytes.
 		unsigned char *points_start = current_track_start + 22 + 13;
-		track->idx_points_n = BE_bytes_to_int(points_start, 1);
-		track->idx_points	= calloc(
+		track->idx_points_n			= BE_bytes_to_int(points_start, 1);
+		track->idx_points			= calloc(
 			  track->idx_points_n, sizeof(struct flac_cuesheet_track_idx_point));
 
 		unsigned char *curr_idx_point = points_start + 1;
@@ -329,6 +331,9 @@ void flac_parse_picture(unsigned char *block, int size,
 
 // ===== Block functions =====
 
+// Parse the FLAC metadata block following the provided header.
+// The function assumes the file has been read up to the end of the
+// provided header, and will read up to the end of the parsed block.
 struct flac_metadata_block *flac_parse_block(unsigned char header[4],
 											 FILE *file) {
 	struct flac_metadata_block *block = malloc(sizeof(*block));
@@ -415,9 +420,10 @@ void flac_metadata_block_free(struct flac_metadata_block *block) {
 }
 
 bool try_flac(FILE *file) {
+	printf("Trying flac...\n");
 	unsigned char signature[4];
 	fread(signature, 4, 1, file);
-	if (0x664C6143 != BE_bytes_to_int(signature, 4)) { return false; }
+	if (memcmp(signature, FLAC_SIGNATURE, 4)) { return false; }
 
 	while (true) {
 		unsigned char header[4];
