@@ -3,3 +3,4 @@ finfo
 *.o
 .vscode/
 temp_picture
+.cache/
