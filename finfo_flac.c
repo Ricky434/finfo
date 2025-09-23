@@ -121,6 +121,8 @@ void flac_print_picture(struct flac_picture *picture) {
 
 // ===== Block parsers =====
 
+// TODO: Use the SIZE argument of the functions to check for buffer overflows.
+
 /*
 * Parse the given array of bytes BLOCK, long SIZE bytes, as a streaminfo metadata block,
 * and put it inside DST.
