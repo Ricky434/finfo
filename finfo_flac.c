@@ -4,6 +4,7 @@
 #include <string.h>
 #include <sys/ioctl.h>
 #include "finfo_flac.h"
+#include "finfo_png.h"
 #include "finfo_utils.h"
 
 unsigned char FLAC_SIGNATURE[4] = {'\x66', '\x4C', '\x61', '\x43'};
@@ -111,11 +112,11 @@ void flac_print_picture(struct flac_picture *picture) {
 	printf("Data len: %u\n", picture->data_len);
 
 	// TODO: check errors
-	FILE *picture_file = fopen("./temp_picture", "wb");
-	fwrite(picture->data, picture->data_len, 1, picture_file);
-	fclose(picture_file);
+	// FILE *picture_file = fopen("./temp_picture", "wb");
+	// fwrite(picture->data, picture->data_len, 1, picture_file);
+	// fclose(picture_file);
 
-	// TODO: print image to terminal with kitty
+	print_png(picture->data, picture->data_len);
 }
 
 // ===== Block parsers =====

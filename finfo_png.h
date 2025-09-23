@@ -22,6 +22,7 @@ void png_chunk_free(struct png_chunk *chunk);
 
 bool try_png(FILE *file);
 
-void print_png(FILE *file);
+void print_png_file(FILE *file);
+void print_png(unsigned char *data, size_t data_len);
 
 #endif // !FINFO_PNG_H

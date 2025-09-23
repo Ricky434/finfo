@@ -47,7 +47,7 @@ char *base64_encode(unsigned char *data, size_t *len) {
 
 	// TODO: make it better
 
-	while (new_len - data_p >= 3) {
+	while (*len - data_p >= 3) {
 		encoded[enc_p+0] = b64_table[data[data_p+0] >> 2];
 		encoded[enc_p+1] = b64_table[(data[data_p+1] >> 4) | ((data[data_p+0] & 0b11) << 4)];
 		encoded[enc_p+2] = b64_table[(data[data_p+2] >> 6) | ((data[data_p+1] & 0b1111) << 2)];
