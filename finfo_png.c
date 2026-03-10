@@ -132,7 +132,9 @@ struct png_chunk *png_parse_chunk(FILE *file) {
 	unsigned char *data_buf = malloc(chunk->length); // NOTE: Risky if length is big
 	fread(data_buf, chunk->length, 1, file);
 
-	png_print_chunk_type(chunk);
+	if (png_parse_type(chunk->type_str) != IDAT){
+		png_print_chunk_type(chunk);
+	}
 
 	int result = 0;
 	switch (png_parse_type(chunk->type_str)) {
@@ -231,9 +233,19 @@ void print_png_file(FILE *file, uint32_t width, uint32_t height) {
 	struct winsize sz;
 	ioctl(0, TIOCGWINSZ, &sz);
 
+	// TODO: brutto
 	float term_col_width_px = (float)sz.ws_xpixel / sz.ws_col;
 	float term_col_height_px = (float)sz.ws_ypixel / sz.ws_row;
-	int	columns = (width < sz.ws_xpixel ? width : sz.ws_xpixel) / term_col_width_px;
+
+	int clamped_width = (width < sz.ws_xpixel ? width : sz.ws_xpixel);
+	int clamped_height = clamped_width * ((float)height/width);
+	// Check if clamped sizes still allow for picture too high (also account for new prompt size)
+	if (clamped_height > (sz.ws_ypixel - 3*term_col_height_px)) {
+		clamped_height = sz.ws_ypixel - 3*term_col_height_px;
+		clamped_width = clamped_height * ((float)width/height);
+	}
+
+	int	columns = clamped_width / term_col_width_px;
 	int rows = columns * ((float)height/width) * (term_col_width_px/term_col_height_px);
 	printf("term col,row = (%d,%d)\nimg = (%d x %d)\nfinal col,row = (%d,%d)\n", sz.ws_col, sz.ws_row, width, height, columns, rows);
 
@@ -264,9 +276,19 @@ void print_png(unsigned char *data, size_t data_len, uint32_t width, uint32_t he
 	struct winsize sz;
 	ioctl(0, TIOCGWINSZ, &sz);
 
+	// TODO: brutto
 	float term_col_width_px = (float)sz.ws_xpixel / sz.ws_col;
 	float term_col_height_px = (float)sz.ws_ypixel / sz.ws_row;
-	int	columns = (width < sz.ws_xpixel ? width : sz.ws_xpixel) / term_col_width_px;
+
+	int clamped_width = (width < sz.ws_xpixel ? width : sz.ws_xpixel);
+	int clamped_height = clamped_width * ((float)height/width);
+	// Check if clamped sizes still allow for picture too high (also account for new prompt size)
+	if (clamped_height > (sz.ws_ypixel - 3*term_col_height_px)) {
+		clamped_height = sz.ws_ypixel - 3*term_col_height_px;
+		clamped_width = clamped_height * ((float)width/height);
+	}
+
+	int	columns = clamped_width / term_col_width_px;
 	int rows = columns * ((float)height/width) * (term_col_width_px/term_col_height_px);
 	printf("term col,row = (%d,%d)\nimg = (%d x %d)\nfinal col,row = (%d,%d)\n", sz.ws_col, sz.ws_row, width, height, columns, rows);
 
