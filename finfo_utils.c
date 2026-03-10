@@ -3,6 +3,10 @@
 #include <stdlib.h>
 #include "finfo_utils.h"
 
+// TODO: Maybe make one for each int size?
+// - maybe more efficient without loop
+// - maybe easier to find bugs if wrong arguments passed
+// nah
 uint64_t BE_bytes_to_int(unsigned char *bytes, unsigned short len) {
 	uint64_t res = 0;
 
@@ -12,7 +16,7 @@ uint64_t BE_bytes_to_int(unsigned char *bytes, unsigned short len) {
 	//    0      1      2      3
 	// <<8*3  <<8*2  <<8*1  <<8*0
 	for (int i = 0; i < actual_len; i++) {
-		res += bytes[i] << 8 * (len - 1 - i);
+		res += (uint64_t)bytes[i] << 8 * (actual_len - 1 - i);
 	}
 
 	return res;
@@ -26,11 +30,13 @@ uint64_t LE_bytes_to_int(unsigned char *bytes, unsigned short len) {
 
 	//    0      1      2      3
 	// <<8*0  <<8*1  <<8*2  <<8*3
-	for (int i = 0; i < actual_len; i++) { res += bytes[i] << (8 * i); }
+	for (int i = 0; i < actual_len; i++) { res += (uint64_t)bytes[i] << (8 * i); }
 
 	return res;
 }
 
+// Encodes a data array of len *len in base64 and returns it
+// The length residing in *len is updated with the length of the b64 encoded string
 char *base64_encode(unsigned char *data, size_t *len) {
 	if (*len == 0) {
 		return NULL;
@@ -44,8 +50,6 @@ char *base64_encode(unsigned char *data, size_t *len) {
 
 	int data_p = 0;
 	int enc_p = 0;
-
-	// TODO: make it better
 
 	while (*len - data_p >= 3) {
 		encoded[enc_p+0] = b64_table[data[data_p+0] >> 2];

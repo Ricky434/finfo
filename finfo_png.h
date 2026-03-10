@@ -31,6 +31,7 @@ struct png_IHDR_chunk {
 	unsigned char filter_method;
 	unsigned char interlace_method;
 };
+#define PNG_IHDR_LEN 13
 
 struct png_PLTE_chunk {
 	struct {
@@ -43,6 +44,7 @@ struct png_PLTE_chunk {
 
 struct png_IDAT_chunk {
 	unsigned char *data;
+	uint32_t length;
 };
 
 struct png_IEND_chunk {};
@@ -51,7 +53,7 @@ struct png_IEND_chunk {};
 
 struct png_chunk {
 	// Length of the data field.
-	uint32_t length;
+	uint32_t length; // NOTE: It is redundant since chunks also contain length (if variable)
 	// Chunk type.
 	char type_str[4];
 	// Chunk data.
@@ -70,7 +72,7 @@ void png_chunk_free(struct png_chunk *chunk);
 
 bool try_png(FILE *file);
 
-void print_png_file(FILE *file);
-void print_png(unsigned char *data, size_t data_len);
+void print_png_file(FILE *file, uint32_t width, uint32_t height);
+void print_png(unsigned char *data, size_t data_len, uint32_t width, uint32_t height);
 
 #endif // !FINFO_PNG_H

@@ -116,7 +116,7 @@ void flac_print_picture(struct flac_picture *picture) {
 	// fwrite(picture->data, picture->data_len, 1, picture_file);
 	// fclose(picture_file);
 
-	print_png(picture->data, picture->data_len);
+	print_png(picture->data, picture->data_len, picture->picture_width, picture->picture_height);
 }
 
 // ===== Block parsers =====
