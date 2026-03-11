@@ -1,3 +1,4 @@
+#include <math.h>
 #include <stdio.h>
 #include <stdbool.h>
 #include <stdlib.h>
@@ -76,7 +77,6 @@ int png_parse_IHDR(unsigned char *data, size_t size, struct png_chunk *ch) {
 	ch->data.IHDR.filter_method = *(data+11);
 	ch->data.IHDR.interlace_method = *(data+12);
 	
-	png_print_IHDR(&ch->data.IHDR);
 	return 0;
 }
 
@@ -99,7 +99,6 @@ int png_parse_PLTE(unsigned char *data, size_t size, struct png_chunk *ch) {
 		ch->data.PLTE.palette[i].b = data[i*3+2];
 	}
 
-	png_print_PLTE(&ch->data.PLTE);
 	return 0;
 }
 
@@ -119,6 +118,9 @@ enum png_chunk_type png_parse_type(char type_str[4]) {
 	return (enum png_chunk_type)BE_bytes_to_int((unsigned char *)type_str, 4);
 }
 
+// Parse the next PNG metadata chunk.
+// The function assumes the file has been read up to the end of the
+// previous chunk (or the PNG signature), and will read up to the end of the parsed chunk.
 struct png_chunk *png_parse_chunk(FILE *file) {
 	struct png_chunk *chunk = malloc(sizeof(*chunk));
 
@@ -131,10 +133,6 @@ struct png_chunk *png_parse_chunk(FILE *file) {
 
 	unsigned char *data_buf = malloc(chunk->length); // NOTE: Risky if length is big
 	fread(data_buf, chunk->length, 1, file);
-
-	if (png_parse_type(chunk->type_str) != IDAT){
-		png_print_chunk_type(chunk);
-	}
 
 	int result = 0;
 	switch (png_parse_type(chunk->type_str)) {
@@ -184,31 +182,45 @@ void png_chunk_free(struct png_chunk *chunk) {
 	free(chunk);
 }
 
+void png_print_chunk(struct png_chunk *chunk) {
+	png_print_chunk_type(chunk);
+
+	switch (png_parse_type(chunk->type_str)) {
+	case IHDR:
+		png_print_IHDR(&chunk->data.IHDR);
+		break;
+	case IEND:
+		break;
+	case PLTE:
+		png_print_PLTE(&chunk->data.PLTE);
+		break;
+	case IDAT:
+		png_print_IDAT(&chunk->data.IDAT);
+		break;
+	case UNKNOWN:
+		break;
+	}
+}
+
 bool try_png(FILE *file) {
 	printf("Trying png...\n");
 	unsigned char signature[8];
 	fread(signature, 8, 1, file);
 	if (memcmp(signature, PNG_SIGNATURE, 8)) { return false; }
 
-	uint32_t img_width, img_height;
-
-	//int data_count = 0;
+	int data_count = 0;
 	while (true) {
 		struct png_chunk *chunk	 = png_parse_chunk(file);
 		if (!chunk) {
-			fprintf(stderr, "Error parsing png, quitting.");
+			fprintf(stderr, "Error parsing png, quitting.\n");
 			return false;
 		}
 		enum png_chunk_type type = png_parse_type(chunk->type_str);
 
-		if (type == IHDR) { 
-			img_width = chunk->data.IHDR.width;
-			img_height = chunk->data.IHDR.height;
-		}
-		// if (type != IDAT || !data_count++) { png_print_chunk_type(chunk); }
+		if (type != IDAT || !data_count++) { png_print_chunk(chunk); }
 
 		if (type == IEND) {
-			// printf("Total data chunks: %d\n", data_count);
+			printf("Total data chunks: %d\n", data_count);
 			png_chunk_free(chunk);
 			break;
 		}
@@ -218,18 +230,54 @@ bool try_png(FILE *file) {
 
 	// Reset position to start of file for printing it
 	fseek(file, 0, SEEK_SET);
-	print_png_file(file, img_width, img_height);
+	print_png_file(file);
 
 	return true;
+}
+
+// Saves the width and height of an image file to ret_width and ret_height.
+// It makes sure that the file STREAM is reset to the beginning after the function
+// completes.
+int png_get_image_sizes(FILE *file, uint32_t *ret_width, uint32_t *ret_height) {
+	fseek(file, 0, SEEK_SET); // TODO: check error
+	
+	unsigned char signature[8];
+	fread(signature, 8, 1, file);
+	if (memcmp(signature, PNG_SIGNATURE, 8)) { 
+		fprintf(stderr, "Not a PNG.\n");
+		goto cleanup_err; 
+	}
+
+	struct png_chunk *chunk	 = png_parse_chunk(file);
+	if (!chunk) {
+		fprintf(stderr, "Error parsing, quitting.\n");
+		goto cleanup_err;
+	}
+	enum png_chunk_type type = png_parse_type(chunk->type_str);
+
+	if (type == IHDR) { 
+		*ret_width = chunk->data.IHDR.width;
+		*ret_height = chunk->data.IHDR.height;
+	}
+	png_chunk_free(chunk);
+	fseek(file, 0, SEEK_SET); // TODO: check error
+	return 0;
+	
+cleanup_err:
+	fseek(file, 0, SEEK_SET); // TODO: check error
+	return -1;
 }
 
 // ===== Kitty image protocol printers =====
 
 #define KITTY_ESCAPE_START "\033_G"
 #define KITTY_ESCAPE_END "\033\\"
-#define KITTY_CHUNK_SIZE 3072
+#define KITTY_CHUNK_SIZE 4096
 
-void print_png_file(FILE *file, uint32_t width, uint32_t height) {
+void print_png_file(FILE *file) {
+	uint32_t width, height;
+	png_get_image_sizes(file, &width, &height);
+
 	struct winsize sz;
 	ioctl(0, TIOCGWINSZ, &sz);
 
@@ -245,9 +293,9 @@ void print_png_file(FILE *file, uint32_t width, uint32_t height) {
 		clamped_width = clamped_height * ((float)width/height);
 	}
 
-	int	columns = clamped_width / term_col_width_px;
-	int rows = columns * ((float)height/width) * (term_col_width_px/term_col_height_px);
-	printf("term col,row = (%d,%d)\nimg = (%d x %d)\nfinal col,row = (%d,%d)\n", sz.ws_col, sz.ws_row, width, height, columns, rows);
+	int columns = roundf(clamped_width / term_col_width_px);
+	int rows = roundf(columns * ((float)height/width) * (term_col_width_px/term_col_height_px));
+	//printf("term col,row = (%d,%d)\nimg = (%d x %d)\nfinal col,row = (%d,%d)\n", sz.ws_col, sz.ws_row, width, height, columns, rows);
 
 	char control_codes[50];
 	snprintf(control_codes, sizeof(control_codes), ",a=T,f=100,c=%d,r=%d",
@@ -258,62 +306,30 @@ void print_png_file(FILE *file, uint32_t width, uint32_t height) {
 	size_t read_n = fread(buf, 1, KITTY_CHUNK_SIZE, file);
 	while (read_n > 0) {
 		char *encoded = base64_encode(buf, &read_n);
+		size_t encoded_len = read_n;
 
-		int last = read_n < KITTY_CHUNK_SIZE;
+		read_n = fread(buf, 1, KITTY_CHUNK_SIZE, file);
+		int last = read_n < 1;
+
 		printf("%sm=%d%s;%.*s%s", KITTY_ESCAPE_START, !last, control_codes,
-			   (int)read_n, encoded, KITTY_ESCAPE_END);
+			   (int)encoded_len, encoded, KITTY_ESCAPE_END);
 
 		// Control codes should be specified only in first chunk
 		*control_codes = '\0';
-
-		read_n = fread(buf, 1, KITTY_CHUNK_SIZE, file);
 	}
 
 	putchar('\n');
 }
 
-void print_png(unsigned char *data, size_t data_len, uint32_t width, uint32_t height) {
-	struct winsize sz;
-	ioctl(0, TIOCGWINSZ, &sz);
-
-	// TODO: brutto
-	float term_col_width_px = (float)sz.ws_xpixel / sz.ws_col;
-	float term_col_height_px = (float)sz.ws_ypixel / sz.ws_row;
-
-	int clamped_width = (width < sz.ws_xpixel ? width : sz.ws_xpixel);
-	int clamped_height = clamped_width * ((float)height/width);
-	// Check if clamped sizes still allow for picture too high (also account for new prompt size)
-	if (clamped_height > (sz.ws_ypixel - 3*term_col_height_px)) {
-		clamped_height = sz.ws_ypixel - 3*term_col_height_px;
-		clamped_width = clamped_height * ((float)width/height);
-	}
-
-	int	columns = clamped_width / term_col_width_px;
-	int rows = columns * ((float)height/width) * (term_col_width_px/term_col_height_px);
-	printf("term col,row = (%d,%d)\nimg = (%d x %d)\nfinal col,row = (%d,%d)\n", sz.ws_col, sz.ws_row, width, height, columns, rows);
-
-	char control_codes[50];
-	snprintf(control_codes, sizeof(control_codes), ",a=T,f=100,c=%d,r=%d",
-			 columns, rows);
-
-	size_t read_data = 0;
-	while (data_len > read_data) {
-		size_t to_read = (data_len - read_data) < KITTY_CHUNK_SIZE
-							 ? (data_len - read_data)
-							 : KITTY_CHUNK_SIZE;
-
-		size_t asd	  = to_read;
-		char *encoded = base64_encode(&data[read_data], &asd);
-
-		int last = to_read < KITTY_CHUNK_SIZE;
-		printf("%sm=%d%s;%.*s%s", KITTY_ESCAPE_START, !last, control_codes,
-			   (int)asd, encoded, KITTY_ESCAPE_END);
-
-		// Control codes should be specified only in first chunk
-		*control_codes = '\0';
-
-		read_data += to_read;
-	}
-
-	putchar('\n');
+void print_png(unsigned char *data, size_t data_len) {
+	// FILE *file = fopen("/tmp/png_test.png", "w+b");
+	// if (file == NULL) {
+	// 	fprintf(stderr, "Unable to open file: %s (%s).\n", "/tmp/png_test.png", strerror(errno));
+	// 	return;
+	// }
+	//
+	// fwrite(data, data_len, 1, file);
+	FILE *file = fmemopen(data, data_len, "rb");
+	print_png_file(file);
+	fclose(file);
 }

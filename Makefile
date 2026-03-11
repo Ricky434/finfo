@@ -1,6 +1,6 @@
 CC=gcc
 CFLAGS=-Wall -g
-LFLAGS=
+LFLAGS=-lm
 
 SRCS = $(wildcard *.c)
 OBJS = $(SRCS:.c=.o)
