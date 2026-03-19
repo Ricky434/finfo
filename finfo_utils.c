@@ -1,6 +1,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include "finfo_utils.h"
 
 // TODO: Maybe make one for each int size?
@@ -77,3 +78,42 @@ char *base64_encode(unsigned char *data, size_t *len) {
 	*len = new_len;
 	return encoded;
 }
+//
+// list list_new(size_t initial_size, size_t elem_size) {
+// 	if (initial_size < 32) {
+// 		initial_size = 32;
+// 	}
+//
+// 	void *items = malloc(sizeof(elem_size) * initial_size);
+// 	list l = { 0, initial_size, elem_size, items };
+// 	return l;
+// }
+//
+// void *list_get(list *l, size_t index) {
+// 	if (index >= l->len) { return NULL; }
+// 	return (char *)l->items + index * l->elem_size;
+// }
+//
+// int list_put(list *l, size_t index, void *item) {
+// 	if (index >= l->len) { return -1; }
+// 	memcpy(l->items + index * l->elem_size, item, l->elem_size);
+// 	return 0;
+// }
+//
+// void list_append(list *l, void *item) {
+// 	if (l->len >= l->capacity) {
+// 		l->items = realloc(l->items, l->capacity*2 * sizeof(void *)); 
+// 		if (!l->items) { 
+// 			printf("out of memory!");
+// 			exit(1);
+// 		}
+// 		l->capacity *= 2;
+// 	}
+//
+// 	memcpy(l->items + l->len * l->elem_size, item, l->elem_size);
+// 	l->len++;
+// }
+//
+// void list_free(list *l) {
+// 	free(l->items);
+// }

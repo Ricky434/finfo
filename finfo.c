@@ -4,6 +4,7 @@
 #include <errno.h>
 #include "finfo_flac.h"
 #include "finfo_png.h"
+#include "finfo_jpeg.h"
 
 int main(int argc, char *argv[]) {
 	for (int i = 0; i < argc; printf("- %s\n", argv[i++])) {}
@@ -20,8 +21,8 @@ int main(int argc, char *argv[]) {
 		return 1;
 	}
 
-	enum { FILE_TYPES_N = 2 };
-	bool (*try_type[FILE_TYPES_N])(FILE *) = {try_flac, try_png};
+	enum { FILE_TYPES_N = 3 };
+	bool (*try_type[FILE_TYPES_N])(FILE *) = {try_flac, try_png, try_jpeg};
 
 	for (int i = 0; i < FILE_TYPES_N; i++) {
 		// Reset read position in file to make it ready for next try.

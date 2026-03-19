@@ -134,6 +134,7 @@ struct png_chunk *png_parse_chunk(FILE *file) {
 	unsigned char *data_buf = malloc(chunk->length); // NOTE: Risky if length is big
 	fread(data_buf, chunk->length, 1, file);
 
+	// TODO: text, itxt, exif, time
 	int result = 0;
 	switch (png_parse_type(chunk->type_str)) {
 	case PLTE:
@@ -282,6 +283,7 @@ void print_png_file(FILE *file) {
 	ioctl(0, TIOCGWINSZ, &sz);
 
 	// TODO: brutto
+	// TODO: not perfect, check kitty icat code
 	float term_col_width_px = (float)sz.ws_xpixel / sz.ws_col;
 	float term_col_height_px = (float)sz.ws_ypixel / sz.ws_row;
 
