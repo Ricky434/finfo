@@ -57,6 +57,18 @@ struct jpeg_DHT_segment {
 	struct jpeg_DHT_table tables[6]; // each segment can contain at most 6 tables
 };
 
+struct jpeg_SOS_component {
+	uint8_t component_selector; // selects frame component specified in SOF
+	uint8_t DC_table_selector;
+	uint8_t AC_table_selector;
+};
+
+struct jpeg_SOS_segment {
+	uint8_t components_n;
+	struct jpeg_SOS_component *components;
+	// TODO: add missing fields, can be ignored for baseline impl.
+};
+
 struct jpeg_segment {
 	uint8_t marker;
 	uint32_t data_len;
@@ -64,6 +76,7 @@ struct jpeg_segment {
 		struct jpeg_SOF_segment SOF;
 		struct jpeg_DQT_segment DQT;
 		struct jpeg_DHT_segment DHT;
+		struct jpeg_SOS_segment SOS;
 	} data;
 };
 

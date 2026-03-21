@@ -115,11 +115,6 @@ int jpeg_parse_DHT(unsigned char *data, size_t size, struct jpeg_segment *segmen
 	// temp
 	for (int tn=0; tn<dht->tables_n; tn++) {
 		printf("Huffman Table. Class: %d, id: %d\n", dht->tables[tn].class, dht->tables[tn].id);
-		// printf("Count: [");
-		// for (int i=0; i<16; i++) {
-		// 	printf("%02d:%02d ", i, dht->tables[tn].count[i]);
-		// 	if (i == 15) printf("\b]\n");
-		// }
 		for (int i=0; i<16; i++) {
 			printf("\tSize %d: [", i);
 			for (int j=0; j<dht->tables[tn].count[i]; j++) {
@@ -128,6 +123,32 @@ int jpeg_parse_DHT(unsigned char *data, size_t size, struct jpeg_segment *segmen
 			}
 			printf("]\n");
 		}
+	}
+	return 0;
+}
+
+int jpeg_parse_SOS(unsigned char *data, size_t size, struct jpeg_segment *segment) {
+	struct jpeg_SOS_segment *sos = &segment->data.SOS;
+
+	sos->components_n = data[0];
+
+	sos->components = malloc(sizeof(struct jpeg_SOS_component)* sos->components_n);
+
+	for (int i=0; i<sos->components_n; i++) {
+		sos->components[i].component_selector = (data+1)[i*2];
+		sos->components[i].DC_table_selector = (data+1)[i*2+1] >> 4;
+		sos->components[i].AC_table_selector = (data+1)[i*2+1] & 0b00001111;
+	}
+
+	// TODO: get other fields info
+
+	// temp
+	printf("Start of Scan\n");
+	for (int i=0; i<sos->components_n; i++) {
+		struct jpeg_SOS_component c = sos->components[i];
+		printf("\tImage component. Scan component: %d, DC table: %d, AC table: %d\n", 
+		 c.component_selector, 
+		 c.DC_table_selector, c.AC_table_selector);
 	}
 	return 0;
 }
@@ -170,6 +191,7 @@ bool try_jpeg(FILE *file) {
 
 		switch (segment.marker) {
 			case JPEG_MARKER_SOS:
+				jpeg_parse_SOS(segment_data, segment.data_len, &segment);
 				break;
 			case JPEG_MARKER_DHT:
 				jpeg_parse_DHT(segment_data, segment.data_len, &segment);
