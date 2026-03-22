@@ -84,7 +84,7 @@ char *base64_encode(unsigned char *data, size_t *len) {
 // 		initial_size = 32;
 // 	}
 //
-// 	void *items = malloc(sizeof(elem_size) * initial_size);
+// 	void *items = malloc(elem_size * initial_size);
 // 	list l = { 0, initial_size, elem_size, items };
 // 	return l;
 // }
@@ -102,7 +102,7 @@ char *base64_encode(unsigned char *data, size_t *len) {
 //
 // void list_append(list *l, void *item) {
 // 	if (l->len >= l->capacity) {
-// 		l->items = realloc(l->items, l->capacity*2 * sizeof(void *)); 
+// 		l->items = realloc(l->items, l->capacity*2 * l->elem_size); 
 // 		if (!l->items) { 
 // 			printf("out of memory!");
 // 			exit(1);
@@ -112,6 +112,20 @@ char *base64_encode(unsigned char *data, size_t *len) {
 //
 // 	memcpy(l->items + l->len * l->elem_size, item, l->elem_size);
 // 	l->len++;
+// }
+//
+// void *list_pop(list *l, size_t index) {
+// 	if (index >= l->len || l->len == 0) { return NULL; }
+//
+// 	void *item = malloc(l->elem_size);
+// 	memcpy(item, l->items + index * l->elem_size, l->elem_size);
+//
+// 	for (size_t i=index; i<l->len-1; i++){
+// 		void *pos = l->items + i * l->elem_size; 
+// 		memcpy(pos, pos+l->elem_size, l->elem_size);
+// 	}
+// 	l->len--;
+// 	return item;
 // }
 //
 // void list_free(list *l) {
