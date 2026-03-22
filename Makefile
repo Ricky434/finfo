@@ -3,7 +3,8 @@ CFLAGS=-Wall -g
 LFLAGS=-lm
 
 SRCS = $(wildcard *.c)
-OBJS = $(SRCS:.c=.o)
+LIBS = $(wildcard libs/*.c)
+OBJS = $(SRCS:.c=.o) $(LIBS:.c=.o)
 
 TARGET = finfo
 
@@ -13,6 +14,7 @@ all: $(TARGET)
 	rm $(OBJS)
 
 $(TARGET):  $(OBJS)
+	echo $(SRCS)
 	$(CC) $(LFLAGS) -o $@ $^
 
 %.o: %.c

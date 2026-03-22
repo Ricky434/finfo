@@ -4,8 +4,10 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/ioctl.h>
 #include "finfo_jpeg.h"
 #include "finfo_utils.h"
+#include "finfo_kitty.h"
 
 int jpeg_parse_DQT(unsigned char *data, size_t size, struct jpeg_segment *segment) {
 	if (size < 64+1) {
@@ -183,7 +185,7 @@ bool try_jpeg(FILE *file) {
 		printf("Found marker: %02X %02X, len: %d\n", marker_bytes[0], marker_bytes[1], segment.data_len);
 		if (marker_bytes[1] == JPEG_MARKER_EOI) {
 			printf("End of image.\n");
-			return true; 
+			break; 
 		}
 
 		unsigned char *segment_data = malloc(segment.data_len);
@@ -230,6 +232,10 @@ bool try_jpeg(FILE *file) {
 			}
 		}
 	}
+
+	// Reset position to start of file for printing it
+	fseek(file, 0, SEEK_SET);
+	kitty_print_file(file);
 
 	return true;
 }

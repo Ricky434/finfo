@@ -1,4 +1,3 @@
-#include <math.h>
 #include <stdio.h>
 #include <stdbool.h>
 #include <stdlib.h>
@@ -6,6 +5,7 @@
 #include <sys/ioctl.h>
 #include "finfo_png.h"
 #include "finfo_utils.h"
+#include "finfo_kitty.h"
 
 unsigned char PNG_SIGNATURE[8] = {'\x89', '\x50', '\x4E', '\x47',
 								  '\x0D', '\x0A', '\x1A', '\x0A'};
@@ -231,7 +231,7 @@ bool try_png(FILE *file) {
 
 	// Reset position to start of file for printing it
 	fseek(file, 0, SEEK_SET);
-	print_png_file(file);
+	kitty_print_file(file);
 
 	return true;
 }
@@ -267,71 +267,4 @@ int png_get_image_sizes(FILE *file, uint32_t *ret_width, uint32_t *ret_height) {
 cleanup_err:
 	fseek(file, 0, SEEK_SET); // TODO: check error
 	return -1;
-}
-
-// ===== Kitty image protocol printers =====
-
-#define KITTY_ESCAPE_START "\033_G"
-#define KITTY_ESCAPE_END "\033\\"
-#define KITTY_CHUNK_SIZE 4096
-
-void print_png_file(FILE *file) {
-	uint32_t width, height;
-	png_get_image_sizes(file, &width, &height);
-
-	struct winsize sz;
-	ioctl(0, TIOCGWINSZ, &sz);
-
-	// TODO: brutto
-	// TODO: not perfect, check kitty icat code
-	float term_col_width_px = (float)sz.ws_xpixel / sz.ws_col;
-	float term_col_height_px = (float)sz.ws_ypixel / sz.ws_row;
-
-	int clamped_width = (width < sz.ws_xpixel ? width : sz.ws_xpixel);
-	int clamped_height = clamped_width * ((float)height/width);
-	// Check if clamped sizes still allow for picture too high (also account for new prompt size)
-	if (clamped_height > (sz.ws_ypixel - 3*term_col_height_px)) {
-		clamped_height = sz.ws_ypixel - 3*term_col_height_px;
-		clamped_width = clamped_height * ((float)width/height);
-	}
-
-	int columns = roundf(clamped_width / term_col_width_px);
-	int rows = roundf(columns * ((float)height/width) * (term_col_width_px/term_col_height_px));
-	//printf("term col,row = (%d,%d)\nimg = (%d x %d)\nfinal col,row = (%d,%d)\n", sz.ws_col, sz.ws_row, width, height, columns, rows);
-
-	char control_codes[50];
-	snprintf(control_codes, sizeof(control_codes), ",a=T,f=100,c=%d,r=%d",
-			 columns, rows);
-
-	unsigned char *buf = malloc(KITTY_CHUNK_SIZE);
-	// KITTY_CHUNK_SIZE of size 1, since fread returns how many items were read
-	size_t read_n = fread(buf, 1, KITTY_CHUNK_SIZE, file);
-	while (read_n > 0) {
-		char *encoded = base64_encode(buf, &read_n);
-		size_t encoded_len = read_n;
-
-		read_n = fread(buf, 1, KITTY_CHUNK_SIZE, file);
-		int last = read_n < 1;
-
-		printf("%sm=%d%s;%.*s%s", KITTY_ESCAPE_START, !last, control_codes,
-			   (int)encoded_len, encoded, KITTY_ESCAPE_END);
-
-		// Control codes should be specified only in first chunk
-		*control_codes = '\0';
-	}
-
-	putchar('\n');
-}
-
-void print_png(unsigned char *data, size_t data_len) {
-	// FILE *file = fopen("/tmp/png_test.png", "w+b");
-	// if (file == NULL) {
-	// 	fprintf(stderr, "Unable to open file: %s (%s).\n", "/tmp/png_test.png", strerror(errno));
-	// 	return;
-	// }
-	//
-	// fwrite(data, data_len, 1, file);
-	FILE *file = fmemopen(data, data_len, "rb");
-	print_png_file(file);
-	fclose(file);
 }
