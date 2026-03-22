@@ -1,4 +1,6 @@
 #include "finfo_utils.h"
+#include <math.h>
+#include <stdio.h>
 #include <sys/ioctl.h>
 #define STB_IMAGE_IMPLEMENTATION
 #define STBI_ONLY_JPEG
@@ -36,13 +38,24 @@ void kitty_print_file(FILE *file) {
 		clamped_width = clamped_height * ((float)width/height);
 	}
 
+	// Center image
+	int	free_hspace = sz.ws_xpixel - clamped_width;
+	int h_offset = free_hspace > 0 ? free_hspace/2 : 0;
+
+	// ---
+	// In Konsole, using X=h_offset works, in Kitty it doesn't
+	// so to fix that we move the cursor manually for the number of columns.
+	for (int i=0; i<ceil(h_offset/((float)sz.ws_xpixel/sz.ws_col)); i++) {printf(" ");}
+	h_offset=0;
+	// ---
+
 	unsigned char *resized = stbir_resize_uint8_linear(data, width, height, 0, 
 				NULL, clamped_width, clamped_height, 0, channels_n == 3 ? STBIR_RGB : STBIR_RGBA);
 	stbi_image_free(data);
 
 	char control_codes[50];
-	snprintf(control_codes, sizeof(control_codes), ",a=T,f=%d,s=%d,v=%d",
-			channels_n == 3 ? 24 : 32, clamped_width, clamped_height);
+	snprintf(control_codes, sizeof(control_codes), ",a=T,X=%d,f=%d,s=%d,v=%d",
+			h_offset, channels_n == 3 ? 24 : 32, clamped_width, clamped_height);
 
 	// Send raw RGB pixel data (already decoded by stbi) in chunks
     unsigned char *ptr = resized;
